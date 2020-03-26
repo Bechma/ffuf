@@ -110,6 +110,7 @@ func main() {
 	flag.BoolVar(&conf.StopOnAll, "sa", false, "Stop on all error cases. Implies -sf and -se.")
 	flag.BoolVar(&conf.FollowRedirects, "r", false, "Follow redirects")
 	flag.BoolVar(&conf.Recursion, "recursion", false, "Scan recursively. Only FUZZ keyword is supported, and URL (-u) has to end in it.")
+	flag.BoolVar(&conf.RetryOnError, "re", false, "Retry every error until success.")
 	flag.IntVar(&conf.RecursionDepth, "recursion-depth", 0, "Maximum recursion depth.")
 	flag.StringVar(&opts.replayProxyURL, "replay-proxy", "", "Replay matched requests using this proxy.")
 	flag.BoolVar(&conf.AutoCalibration, "ac", false, "Automatically calibrate filtering options")

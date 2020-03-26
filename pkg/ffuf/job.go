@@ -262,13 +262,20 @@ func (j *Job) runTask(input map[string][]byte, position int, retried bool) {
 	}
 	resp, err := j.Runner.Execute(&req)
 	if err != nil {
-		if retried {
-			j.incError()
-			log.Printf("%s", err)
+		if j.Config.RetryOnError {
+			for err != nil {
+				time.Sleep(5 * time.Second)
+				resp, err = j.Runner.Execute(&req)
+			}
 		} else {
-			j.runTask(input, position, true)
+			if retried {
+				j.incError()
+				log.Printf("%s", err)
+			} else {
+				j.runTask(input, position, true)
+			}
+			return
 		}
-		return
 	}
 	if j.SpuriousErrorCounter > 0 {
 		j.resetSpuriousErrors()
