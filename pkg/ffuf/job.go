@@ -263,8 +263,8 @@ func (j *Job) runTask(input map[string][]byte, position int, retried bool) {
 	resp, err := j.Runner.Execute(&req)
 	if err != nil {
 		if j.Config.RetryOnError {
-			for err != nil {
-				time.Sleep(5 * time.Second)
+			for err != nil && j.Running {
+				time.Sleep(time.Duration(rand.Int()%10) * time.Second)
 				resp, err = j.Runner.Execute(&req)
 			}
 		} else {
