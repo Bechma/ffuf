@@ -112,6 +112,7 @@ func main() {
 	flag.BoolVar(&conf.Recursion, "recursion", false, "Scan recursively. Only FUZZ keyword is supported, and URL (-u) has to end in it.")
 	flag.BoolVar(&conf.RetryOnError, "re", false, "Retry every error until success.")
 	flag.StringVar(&conf.CmdBanned, "cmd-banned", "", "Command to execute if there are proofs that we have been banned.")
+	flag.StringVar(&conf.Egrep, "egrep", "", "Regular expression to match in the body of the response. If there is a match, cmd-banned will execute")
 	flag.IntVar(&conf.RecursionDepth, "recursion-depth", 0, "Maximum recursion depth.")
 	flag.StringVar(&opts.replayProxyURL, "replay-proxy", "", "Replay matched requests using this proxy.")
 	flag.BoolVar(&conf.AutoCalibration, "ac", false, "Automatically calibrate filtering options")

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"regexp"
 	"runtime"
 	"sync"
 	"syscall"
@@ -15,10 +16,12 @@ import (
 
 //Job ties together Config, Runner, Input and Output
 type Job struct {
-	Config               *Config
-	ErrorMutex           sync.Mutex
-	CmdMutex             sync.Mutex
-	CmdCounter           int
+	Config       *Config
+	ErrorMutex   sync.Mutex
+	CmdMutex     sync.Mutex
+	CmdCounter   int
+	EgrepCounter int
+
 	Input                InputProvider
 	Runner               RunnerProvider
 	ReplayRunner         RunnerProvider
@@ -212,7 +215,13 @@ func (j *Job) runProgress(wg *sync.WaitGroup) {
 			return
 		}
 
-		j.bannedCheck()
+		if j.CmdCounter > 0 || j.EgrepCounter > 0 {
+			j.bannedCheck()
+			j.CmdMutex.Lock()
+			j.EgrepCounter = 0
+			j.CmdCounter = 0
+			j.CmdMutex.Unlock()
+		}
 
 		time.Sleep(time.Millisecond * time.Duration(j.Config.ProgressFrequency))
 	}
@@ -258,30 +267,26 @@ func (j *Job) isMatch(resp Response) bool {
 }
 
 func (j *Job) runTask(input map[string][]byte, position int, retried bool) {
+	if !j.Running {
+		return
+	}
 	req, err := j.Runner.Prepare(input)
-	req.Position = position
 	if err != nil {
 		j.Output.Error(fmt.Sprintf("Encountered an error while preparing request: %s\n", err))
 		j.incError()
 		log.Printf("%s", err)
 		return
 	}
+	req.Position = position
 	resp, err := j.Runner.Execute(&req)
 	if err != nil {
 		if j.Config.RetryOnError {
-			if j.Config.CmdBanned != "" {
-				j.CmdMutex.Lock()
-				j.CmdCounter++
-				j.CmdMutex.Unlock()
-			}
+			j.CmdMutex.Lock()
+			j.CmdCounter++
+			j.CmdMutex.Unlock()
 			for err != nil && j.Running {
 				time.Sleep(time.Duration(rand.Int()%10) * time.Second)
 				resp, err = j.Runner.Execute(&req)
-			}
-			if j.Config.CmdBanned != "" {
-				j.CmdMutex.Lock()
-				j.CmdCounter--
-				j.CmdMutex.Unlock()
 			}
 		} else {
 			if retried {
@@ -290,6 +295,18 @@ func (j *Job) runTask(input map[string][]byte, position int, retried bool) {
 			} else {
 				j.runTask(input, position, true)
 			}
+			return
+		}
+	}
+	if j.Config.Egrep != "" {
+		if re := regexp.MustCompile(j.Config.Egrep); re.Match(resp.Data) {
+			j.CmdMutex.Lock()
+			j.EgrepCounter++
+			j.CmdMutex.Unlock()
+			for j.EgrepCounter > 0 && j.Running {
+				time.Sleep(time.Duration(rand.Int()%10) * time.Second)
+			}
+			j.runTask(input, position, retried)
 			return
 		}
 	}
@@ -451,16 +468,17 @@ func (j *Job) Next() {
 }
 
 func (j *Job) bannedCheck() {
-	if j.Config.CmdBanned != "" && j.CmdCounter == j.Config.Threads {
-		cmd := exec.Command("/bin/sh", "-c", j.Config.CmdBanned)
-		if runtime.GOOS == "windows" {
-			cmd = exec.Command("cmd", "/c", j.Config.CmdBanned)
-		}
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Env = os.Environ()
-		if err := cmd.Run(); err != nil {
-			fmt.Println(err)
-		}
+	if j.Config.CmdBanned == "" {
+		panic("You need to provide the option cmd-banned")
+	}
+	cmd := exec.Command("/bin/sh", "-c", j.Config.CmdBanned)
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/c", j.Config.CmdBanned)
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	if err := cmd.Run(); err != nil {
+		fmt.Println(err)
 	}
 }
