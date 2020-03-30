@@ -5,7 +5,9 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -15,6 +17,8 @@ import (
 type Job struct {
 	Config               *Config
 	ErrorMutex           sync.Mutex
+	CmdMutex             sync.Mutex
+	CmdCounter           int
 	Input                InputProvider
 	Runner               RunnerProvider
 	ReplayRunner         RunnerProvider
@@ -208,6 +212,8 @@ func (j *Job) runProgress(wg *sync.WaitGroup) {
 			return
 		}
 
+		j.bannedCheck()
+
 		time.Sleep(time.Millisecond * time.Duration(j.Config.ProgressFrequency))
 	}
 }
@@ -263,9 +269,19 @@ func (j *Job) runTask(input map[string][]byte, position int, retried bool) {
 	resp, err := j.Runner.Execute(&req)
 	if err != nil {
 		if j.Config.RetryOnError {
+			if j.Config.CmdBanned != "" {
+				j.CmdMutex.Lock()
+				j.CmdCounter++
+				j.CmdMutex.Unlock()
+			}
 			for err != nil && j.Running {
 				time.Sleep(time.Duration(rand.Int()%10) * time.Second)
 				resp, err = j.Runner.Execute(&req)
+			}
+			if j.Config.CmdBanned != "" {
+				j.CmdMutex.Lock()
+				j.CmdCounter--
+				j.CmdMutex.Unlock()
 			}
 		} else {
 			if retried {
@@ -432,4 +448,19 @@ func (j *Job) Stop() {
 func (j *Job) Next() {
 	j.RunningJob = false
 	return
+}
+
+func (j *Job) bannedCheck() {
+	if j.Config.CmdBanned != "" && j.CmdCounter == j.Config.Threads {
+		cmd := exec.Command("/bin/sh", "-c", j.Config.CmdBanned)
+		if runtime.GOOS == "windows" {
+			cmd = exec.Command(j.Config.CmdBanned)
+		}
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Env = os.Environ()
+		if err := cmd.Run(); err != nil {
+			fmt.Println(err)
+		}
+	}
 }

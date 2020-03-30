@@ -44,6 +44,7 @@ type Config struct {
 	Recursion              bool                      `json:"recursion"`
 	RecursionDepth         int                       `json:"recursion_depth"`
 	RetryOnError           bool                      `json:"retry_on_error"`
+	CmdBanned              string                    `json:"cmd_banned"`
 }
 
 type InputProviderConfig struct {
@@ -85,5 +86,6 @@ func NewConfig(ctx context.Context) Config {
 	conf.Recursion = false
 	conf.RecursionDepth = 0
 	conf.RetryOnError = false
+	conf.CmdBanned = ""
 	return conf
 }
