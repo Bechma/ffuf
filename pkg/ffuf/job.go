@@ -454,7 +454,7 @@ func (j *Job) bannedCheck() {
 	if j.Config.CmdBanned != "" && j.CmdCounter == j.Config.Threads {
 		cmd := exec.Command("/bin/sh", "-c", j.Config.CmdBanned)
 		if runtime.GOOS == "windows" {
-			cmd = exec.Command(j.Config.CmdBanned)
+			cmd = exec.Command("cmd", "/c", j.Config.CmdBanned)
 		}
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
