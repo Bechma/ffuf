@@ -72,6 +72,9 @@ func (r *SimpleRunner) Prepare(input map[string][]byte) (ffuf.Request, error) {
 	req.Data = []byte(r.config.Data)
 
 	for keyword, inputitem := range input {
+		if _, err := url.QueryUnescape(string(inputitem)); err != nil {
+			inputitem = []byte(url.QueryEscape(string(inputitem)))
+		}
 		req.Method = strings.Replace(req.Method, keyword, string(inputitem), -1)
 		headers := make(map[string]string, 0)
 		for h, v := range req.Headers {
@@ -81,9 +84,6 @@ func (r *SimpleRunner) Prepare(input map[string][]byte) (ffuf.Request, error) {
 		req.Headers = headers
 		req.Url = strings.Replace(req.Url, keyword, string(inputitem), -1)
 		req.Data = []byte(strings.Replace(string(req.Data), keyword, string(inputitem), -1))
-		if _, err := url.QueryUnescape(string(inputitem)); err != nil {
-			return ffuf.Request{}, err
-		}
 	}
 
 	req.Input = input
