@@ -10,6 +10,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -101,7 +102,7 @@ func main() {
 	flag.StringVar(&opts.requestProto, "request-proto", "https", "Protocol to use along with raw request")
 	flag.StringVar(&conf.Method, "X", "GET", "HTTP method to use")
 	flag.StringVar(&conf.OutputFile, "o", "", "Write output to file")
-	flag.StringVar(&opts.outputFormat, "of", "json", "Output file format. Available formats: json, ejson, html, md, csv, ecsv")
+	flag.StringVar(&opts.outputFormat, "of", "json", "Output file format. Available formats: json, ejson, html, md, csv, ecsv (or, 'all' for all formats)")
 	flag.StringVar(&conf.OutputDirectory, "od", "", "Directory path to store matched results to.")
 	flag.BoolVar(&conf.IgnoreBody, "ignore-body", false, "Do not fetch the response content.")
 	flag.BoolVar(&conf.Quiet, "s", false, "Do not print additional information (silent mode)")
@@ -306,7 +307,24 @@ func prepareConfig(parseOpts *cliOptions, conf *ffuf.Config) error {
 
 	//Prepare inputproviders
 	for _, v := range parseOpts.wordlists {
-		wl := strings.SplitN(v, ":", 2)
+		var wl []string
+		if runtime.GOOS == "windows" {
+			// Try to ensure that Windows file paths like C:\path\to\wordlist.txt:KEYWORD are treated properly
+			if ffuf.FileExists(v) {
+				// The wordlist was supplied without a keyword parameter
+				wl = []string{v}
+			} else {
+				filepart := v[:strings.LastIndex(v, ":")]
+				if ffuf.FileExists(filepart) {
+					wl = []string{filepart, v[strings.LastIndex(v, ":")+1:]}
+				} else {
+					// The file was not found. Use full wordlist parameter value for more concise error message down the line
+					wl = []string{v}
+				}
+			}
+		} else {
+			wl = strings.SplitN(v, ":", 2)
+		}
 		if len(wl) == 2 {
 			conf.InputProviders = append(conf.InputProviders, ffuf.InputProviderConfig{
 				Name:    "wordlist",
@@ -433,7 +451,7 @@ func prepareConfig(parseOpts *cliOptions, conf *ffuf.Config) error {
 	//Check the output file format option
 	if conf.OutputFile != "" {
 		//No need to check / error out if output file isn't defined
-		outputFormats := []string{"json", "ejson", "html", "md", "csv", "ecsv"}
+		outputFormats := []string{"all", "json", "ejson", "html", "md", "csv", "ecsv"}
 		found := false
 		for _, f := range outputFormats {
 			if f == parseOpts.outputFormat {
